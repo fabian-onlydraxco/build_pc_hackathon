@@ -17,6 +17,9 @@ const USAGE = {
   revise: { input: 6000, output: 2000 },    // ≈ $0.048
   exec: { input: 4000, output: 2533 },      // ≈ $0.050
   'hire-propose': { input: 2000, output: 800 }, // ≈ $0.018
+  direct: { input: 3000, output: 1200 },        // ≈ $0.027
+  instruct: { input: 2500, output: 400 },       // ≈ $0.013
+  intake: { input: 1500, output: 500 },         // ≈ $0.012
 }
 
 const BASE_DELAY = {
@@ -27,6 +30,9 @@ const BASE_DELAY = {
   revise: 1400,
   exec: 1500,
   'hire-propose': 700,
+  direct: 1100,
+  instruct: 900,
+  intake: 800,
 }
 
 function hash(str) {
@@ -56,6 +62,38 @@ export async function mockComplete({ signal, meta }) {
     await sleep(BASE_DELAY[stage] * PACE, signal)
     return {
       text: JSON.stringify(draftProposal(meta.description || '', meta.chiefTitle, meta.notes || [])),
+      usage: USAGE[stage],
+    }
+  }
+  if (stage === 'direct') {
+    await sleep(BASE_DELAY[stage] * PACE, signal)
+    const order = meta.text || 'the order'
+    return {
+      text: `**Direct order handled.**\n\nYou asked: "${order}"\n\n- Scoped it, executed it, and verified the result myself — no hand-offs.\n- Outcome: done to spec, ready for your review in my task log.\n- One flag for you: if this should become a standing task, say the word and I'll fold it into the department plan.`,
+      usage: USAGE[stage],
+    }
+  }
+  if (stage === 'instruct') {
+    await sleep(BASE_DELAY[stage] * PACE, signal)
+    return {
+      text: `Understood — "${meta.text || 'your note'}" is now a standing instruction. Every chief gets it with their next task, and I'll hold their output against it. (Mock mode: add an API key for a real conversation.)`,
+      usage: USAGE[stage],
+    }
+  }
+  if (stage === 'intake') {
+    await sleep(BASE_DELAY[stage] * PACE, signal)
+    if (!meta.turns) {
+      return {
+        text: `So the mission is: "${idea}". Before I staff up, three quick checks — 1) Who is the main customer? (default: young professionals) 2) What price point feels right? (default: around $9.99) 3) What tone should the brand carry? (default: clean and friendly). Answer any of these, or say "start" and I'll run with the defaults.`,
+        usage: USAGE[stage],
+      }
+    }
+    return {
+      text: JSON.stringify({
+        reply: 'Perfect — that gives me everything I need. Locking the brief and building your company now.',
+        ready: true,
+        brief: ['Honor the CEO\'s intake answers exactly', `Latest CEO note: ${meta.text || 'run with the defaults'}`],
+      }),
       usage: USAGE[stage],
     }
   }

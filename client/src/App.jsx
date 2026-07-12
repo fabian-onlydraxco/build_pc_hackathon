@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { fmtTime } from './lib/format.js'
 import { initialState, projectsInitial, projectsReducer } from './lib/store.js'
 import { useRunStreams } from './lib/useRunStream.js'
 import * as api from './lib/api.js'
@@ -8,11 +9,12 @@ import DashView from './components/dash/DashView.jsx'
 import ControlView from './components/control/ControlView.jsx'
 
 export default function App() {
-  const [{ projects, order }, dispatch] = useReducer(projectsReducer, projectsInitial)
+  const [{ projects, order, notices }, dispatch] = useReducer(projectsReducer, projectsInitial)
   const [activeId, setActiveId] = useState(null)
   const [section, setSection] = useState('dash')
   const [selectedId, setSelectedId] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [noticesOpen, setNoticesOpen] = useState(false)
   const [toast, setToast] = useState(null)
   const [pins, setPins] = useState(() => {
     try {
@@ -146,6 +148,31 @@ export default function App() {
     }
   }
 
+  const direct = async (chiefId, text) => {
+    try {
+      await api.directTask(activeId, chiefId, text)
+    } catch (err) {
+      flashToast(err.message)
+    }
+  }
+
+  const build = async () => {
+    try {
+      await api.buildRun(activeId)
+    } catch (err) {
+      flashToast(err.message)
+    }
+  }
+
+  const toggleNotices = () => {
+    setNoticesOpen((open) => {
+      if (!open) dispatch({ type: 'notices-read' })
+      return !open
+    })
+  }
+
+  const unread = notices.filter((n) => !n.read).length
+
   const updateAgent = async (agentId, patch) => {
     try {
       await api.updateAgent(activeId, agentId, patch)
@@ -164,7 +191,7 @@ export default function App() {
     }
   }
 
-  const running = ['composing', 'staffing', 'working', 'delivering'].includes(view.status)
+  const running = ['intake', 'composing', 'staffing', 'working', 'delivering'].includes(view.status)
 
   return (
     <div className="shell">
@@ -192,9 +219,20 @@ export default function App() {
           killEnabled={Boolean(activeId) && (running || view.killed)}
           showBrand={!sidebarOpen}
           onShowSidebar={() => setSidebarOpen(true)}
+          unread={unread}
+          noticesOpen={noticesOpen}
+          onToggleNotices={toggleNotices}
         />
         {section === 'dash' ? (
-          <DashView key={activeId || 'new'} state={view} onStart={startRun} onDecide={decide} onInstruct={instruct} />
+          <DashView
+            key={activeId || 'new'}
+            state={view}
+            onStart={startRun}
+            onDecide={decide}
+            onInstruct={instruct}
+            onDirect={direct}
+            onBuild={build}
+          />
         ) : (
           <ControlView
             key={activeId || 'none'}
@@ -203,11 +241,44 @@ export default function App() {
             setSelectedId={setSelectedId}
             onUpdateAgent={updateAgent}
             onDecide={decide}
+            onDirect={direct}
             goDash={() => setSection('dash')}
             notify={flashToast}
           />
         )}
       </div>
+
+      {noticesOpen && (
+        <div className="notices" role="dialog" aria-label="Notifications">
+          <div className="notices__head">
+            <span className="panel__title">Notifications</span>
+            <button className="inspector__close" onClick={() => setNoticesOpen(false)} aria-label="Close notifications">
+              ×
+            </button>
+          </div>
+          <div className="notices__list">
+            {notices.length === 0 && <div className="notices__empty label">All quiet — nothing needs you.</div>}
+            {notices.map((notice) => (
+              <button
+                key={notice.id}
+                className="notice"
+                onClick={() => {
+                  selectProject(notice.runId)
+                  setNoticesOpen(false)
+                }}
+              >
+                <span className="notice__row">
+                  <span className={`notice__kind notice__kind--${notice.kind}`}>{notice.kind}</span>
+                  <span className="notice__meta">
+                    {notice.company} · {fmtTime(notice.ts)}
+                  </span>
+                </span>
+                <span className="notice__text">{notice.text}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {view.killed && (
         <div className="freeze-veil" role="status">

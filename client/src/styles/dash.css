@@ -195,6 +195,131 @@
   flex: none;
 }
 
+.composer__wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.narration--agent .narration__text {
+  border-left: 2px solid var(--ink);
+  padding-left: var(--s3);
+  white-space: pre-wrap;
+}
+
+/* The CEO's own messages — right-aligned, unmistakably not an agent. */
+.narration--ceo {
+  text-align: right;
+}
+
+.narration--ceo .narration__text {
+  display: inline-block;
+  text-align: left;
+  border-right: 2px solid var(--g2);
+  padding-right: var(--s3);
+  color: var(--g1);
+}
+
+/* Fresh deliverables embedded in the stream */
+.embed {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--s4);
+  cursor: pointer;
+  animation: rise 240ms var(--ease-out);
+  transition: border-color 140ms var(--ease-out);
+}
+
+.embed:hover {
+  border-color: var(--ink);
+}
+
+.embed__tag {
+  display: block;
+  margin-bottom: var(--s1);
+}
+
+.embed__title {
+  display: block;
+  font-size: var(--t-md);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.embed__meta {
+  display: block;
+  margin-top: var(--s1);
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--g1);
+}
+
+/* Intake bar — the interview's skip hatch, pinned above the composer */
+.intake {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  max-width: 720px;
+  margin: 0 auto var(--s3);
+}
+
+/* @-mention picker floats above the composer */
+.mention {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: min(340px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+  animation: rise 180ms var(--ease-out);
+  z-index: 20;
+}
+
+.mention__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  width: 100%;
+  text-align: left;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+  transition: background 120ms ease;
+}
+
+.mention__item:last-child {
+  border-bottom: none;
+}
+
+.mention__item:hover {
+  background: var(--paper);
+}
+
+.mention__name {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.mention__title {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--g1);
+  white-space: nowrap;
+}
+
 .composer {
   max-width: 720px;
   margin: 0 auto;

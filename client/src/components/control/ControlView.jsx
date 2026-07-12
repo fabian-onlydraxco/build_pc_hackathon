@@ -7,7 +7,7 @@ import ArtifactViewer from './ArtifactViewer.jsx'
 import HirePanel from './HirePanel.jsx'
 import DecisionCard from '../dash/DecisionCard.jsx'
 
-export default function ControlView({ state, selectedId, setSelectedId, onUpdateAgent, onDecide, goDash, notify }) {
+export default function ControlView({ state, selectedId, setSelectedId, onUpdateAgent, onDecide, onDirect, goDash, notify }) {
   const [viewingId, setViewingId] = useState(null)
   const [hireChiefId, setHireChiefId] = useState(null)
   const selected = selectedId ? state.agents[selectedId] : null
@@ -40,8 +40,10 @@ export default function ControlView({ state, selectedId, setSelectedId, onUpdate
             key={selected.id}
             agent={selected}
             dept={state.deptSpend[selected.id]}
+            msgs={state.msgs[selected.id] || []}
             onClose={() => setSelectedId(null)}
             onUpdate={(patch) => onUpdateAgent(selected.id, patch)}
+            onDirect={(text) => onDirect(selected.id, text)}
           />
         </>
       )}

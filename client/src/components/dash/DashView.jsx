@@ -1,12 +1,34 @@
 import { useEffect, useRef, useState } from 'react'
+import { marked } from 'marked'
 import DecisionCard from './DecisionCard.jsx'
+import ArtifactViewer from '../control/ArtifactViewer.jsx'
 
-export default function DashView({ state, onStart, onDecide, onInstruct }) {
+// Officer replies arrive as markdown; render it (with raw HTML escaped).
+const renderAgentMarkdown = (text) =>
+  marked.parse(String(text || '').replace(/<(?=[a-zA-Z/!])/g, '&lt;'))
+
+export default function DashView({ state, onStart, onDecide, onInstruct, onDirect, onBuild }) {
   const idle = state.status === 'idle'
   return (
     <div className="dash">
-      {idle ? <Quest onStart={onStart} /> : <Running state={state} onDecide={onDecide} onInstruct={onInstruct} />}
+      {idle ? (
+        <Quest onStart={onStart} />
+      ) : (
+        <Running state={state} onDecide={onDecide} onInstruct={onInstruct} onDirect={onDirect} onBuild={onBuild} />
+      )}
     </div>
+  )
+}
+
+// A fresh deliverable, embedded right in the conversation.
+function ArtifactEmbed({ artifact, onOpen }) {
+  if (!artifact) return null
+  return (
+    <button className="embed" onClick={onOpen}>
+      <span className="embed__tag label">Artifact · {artifact.chiefTitle}</span>
+      <span className="embed__title">{artifact.title}</span>
+      <span className="embed__meta">{artifact.format === 'html' ? 'live preview' : 'document'} · open →</span>
+    </button>
   )
 }
 
@@ -91,9 +113,33 @@ function LiveBoard({ state }) {
   )
 }
 
-function Running({ state, onDecide, onInstruct }) {
+function Running({ state, onDecide, onInstruct, onDirect, onBuild }) {
   const streamRef = useRef(null)
+  const inputRef = useRef(null)
   const [note, setNote] = useState('')
+  const [viewingId, setViewingId] = useState(null)
+  const viewing = viewingId ? state.artifacts[viewingId] : null
+
+  // @-tagging: type "@" to pick an officer; the order skips the chain and
+  // goes straight to them.
+  const officers = Object.values(state.agents).filter(
+    (agent) => agent.tier === 'chief' || agent.tier === 'coo',
+  )
+  const matchOfficer = (text) => {
+    if (!text.startsWith('@')) return null
+    const rest = text.slice(1).toLowerCase()
+    return officers.find((officer) => rest.startsWith(officer.name.toLowerCase() + ' ')) || null
+  }
+  const mentionQuery =
+    note.startsWith('@') && !matchOfficer(note) ? note.slice(1).toLowerCase() : null
+  const suggestions =
+    mentionQuery === null
+      ? []
+      : officers.filter(
+          (officer) =>
+            officer.name.toLowerCase().includes(mentionQuery) ||
+            officer.title.toLowerCase().includes(mentionQuery),
+        )
 
   // Land at the latest when this project opens…
   useEffect(() => {
@@ -112,8 +158,16 @@ function Running({ state, onDecide, onInstruct }) {
 
   const send = (event) => {
     event.preventDefault()
-    if (!note.trim()) return
-    onInstruct(note.trim())
+    const text = note.trim()
+    if (!text) return
+    const officer = matchOfficer(text.startsWith('@') ? `${text} ` : text)
+    if (officer) {
+      const order = text.slice(1 + officer.name.length).trim()
+      if (!order) return
+      onDirect(officer.id, order)
+    } else {
+      onInstruct(text)
+    }
     setNote('')
   }
 
@@ -124,10 +178,32 @@ function Running({ state, onDecide, onInstruct }) {
           <div className={`stream__item ${item.kind === 'error' ? 'stream__error' : ''}`} key={item.seq}>
             {item.kind === 'card' ? (
               <DecisionCard card={state.cards[item.cardId]} onDecide={onDecide} />
+            ) : item.kind === 'artifact' ? (
+              <ArtifactEmbed
+                artifact={state.artifacts[item.artifactId]}
+                onOpen={() => setViewingId(item.artifactId)}
+              />
             ) : (
-              <div className="narration">
-                <div className="narration__who label">{item.kind === 'error' ? 'incident' : 'Atlas · COO'}</div>
-                <div className="narration__text">{item.text}</div>
+              <div
+                className={`narration ${item.kind === 'agent' ? 'narration--agent' : ''} ${item.kind === 'ceo' ? 'narration--ceo' : ''}`}
+              >
+                <div className="narration__who label">
+                  {item.kind === 'error'
+                    ? 'incident'
+                    : item.kind === 'agent'
+                      ? `${item.name} · ${item.title}`
+                      : item.kind === 'ceo'
+                        ? 'You · CEO'
+                        : 'Atlas · COO'}
+                </div>
+                {item.kind === 'agent' ? (
+                  <div
+                    className="narration__text md"
+                    dangerouslySetInnerHTML={{ __html: renderAgentMarkdown(item.text) }}
+                  />
+                ) : (
+                  <div className="narration__text">{item.text}</div>
+                )}
               </div>
             )}
           </div>
@@ -137,18 +213,48 @@ function Running({ state, onDecide, onInstruct }) {
       <LiveBoard state={state} />
 
       <div className="dash__composer">
-        <form className="composer" onSubmit={send}>
-          <input
-            className="composer__input"
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Tell your COO anything — it steers the company…"
-          />
-          <button className="btn btn--ghost btn--sm" type="submit" disabled={!note.trim()}>
-            Send
-          </button>
-        </form>
+        {state.status === 'intake' && (
+          <div className="intake">
+            <span className="label">Atlas is scoping your project — answer his questions below, or skip ahead</span>
+            <button className="btn btn--ink btn--sm" onClick={onBuild}>
+              Start building now
+            </button>
+          </div>
+        )}
+        <div className="composer__wrap">
+          {suggestions.length > 0 && (
+            <div className="mention" role="listbox" aria-label="Tag an officer">
+              {suggestions.map((officer) => (
+                <button
+                  key={officer.id}
+                  className="mention__item"
+                  onClick={() => {
+                    setNote(`@${officer.name} `)
+                    inputRef.current?.focus()
+                  }}
+                >
+                  <span className="mention__name">@{officer.name}</span>
+                  <span className="mention__title">{officer.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <form className="composer" onSubmit={send}>
+            <input
+              ref={inputRef}
+              className="composer__input"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Tell your COO anything — or @ an officer for a direct order…"
+            />
+            <button className="btn btn--ghost btn--sm" type="submit" disabled={!note.trim()}>
+              Send
+            </button>
+          </form>
+        </div>
       </div>
+
+      {viewing && <ArtifactViewer artifact={viewing} onClose={() => setViewingId(null)} />}
     </>
   )
 }

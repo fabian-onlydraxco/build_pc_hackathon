@@ -29,6 +29,8 @@ export function createRun({ idea, mode = 'live' }) {
     delivered: false,
     startedAt: Date.now(),
     replay: null,
+    intake: null,
+    announced: false,
   }
   runs.set(id, run)
   return run

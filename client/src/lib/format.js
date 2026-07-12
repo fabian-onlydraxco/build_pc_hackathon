@@ -12,6 +12,7 @@ export const fmtBurn = (n) => {
 
 export const STATUS_WORD = {
   idle: 'ready',
+  intake: 'briefing',
   composing: 'composing',
   staffing: 'staffing',
   working: 'working',

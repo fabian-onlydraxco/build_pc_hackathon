@@ -907,3 +907,63 @@
   accent-color: var(--ink);
   margin-right: 6px;
 }
+
+/* ------------------------------------------------ agent comms thread */
+
+.thread {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--s3);
+  background: var(--surface);
+}
+
+.thread__msg {
+  border-left: 2px solid var(--line);
+  padding-left: var(--s2);
+}
+
+.thread__msg--in {
+  border-left-color: var(--g2);
+}
+
+.thread__msg--out {
+  border-left-color: var(--ink);
+}
+
+.thread__meta {
+  margin-bottom: 2px;
+}
+
+.thread__text {
+  font-size: var(--t-xs);
+  color: var(--g1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.thread__more {
+  border: 0;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  text-decoration: underline;
+  cursor: pointer;
+  color: var(--g1);
+  padding: 0;
+  margin-top: 2px;
+}
+
+.thread__composer {
+  display: flex;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+
+.thread__composer .field__input {
+  flex: 1;
+}

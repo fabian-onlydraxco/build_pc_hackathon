@@ -14,10 +14,11 @@ export const initialState = {
   agents: {},
   agentOrder: [],
   cards: {},
-  stream: [], // {kind: narration|card|error, ...}
+  stream: [], // {kind: narration|ceo|agent|card|artifact|error, ...}
   artifacts: {},
   artifactOrder: [],
   deptSpend: {}, // chiefId -> {spent, budget}
+  msgs: {}, // agentId -> [{seq, ts, kind: brief|work, stage, fromId, fromName, toId, toName, text}]
   lastSeq: 0,
 }
 
@@ -29,12 +30,32 @@ const patchAgent = (state, agentId, patch) => {
 
 // ------------------------------------------------- multi-project root state
 
-export const projectsInitial = { projects: {}, order: [] }
+export const projectsInitial = { projects: {}, order: [], notices: [] }
+
+// Events worth surfacing in the bell. Anything older than the hydration
+// window arrives pre-read so a page reload doesn't fake a full inbox.
+function noticeFor(event, project) {
+  const { type, data } = event
+  const company = project.companyName || (project.idea ? project.idea.slice(0, 32) : 'Project')
+  switch (type) {
+    case 'needs_approval':
+      return { kind: 'decision', text: data.card.title, company }
+    case 'artifact_ready':
+      return { kind: 'artifact', text: data.artifact.title, company }
+    case 'run_done':
+      return { kind: 'done', text: 'Package delivered', company }
+    case 'error':
+      return { kind: 'incident', text: data.message, company }
+    default:
+      return null
+  }
+}
 
 export function projectsReducer(state, action) {
   if (action.type === 'add-run') {
     if (state.projects[action.runId]) return state
     return {
+      ...state,
       projects: { ...state.projects, [action.runId]: { ...initialState, runId: action.runId } },
       order: [action.runId, ...state.order],
     }
@@ -43,16 +64,41 @@ export function projectsReducer(state, action) {
     if (!state.projects[action.runId]) return state
     const projects = { ...state.projects }
     delete projects[action.runId]
-    return { projects, order: state.order.filter((id) => id !== action.runId) }
+    return {
+      projects,
+      order: state.order.filter((id) => id !== action.runId),
+      notices: state.notices.filter((n) => n.runId !== action.runId),
+    }
+  }
+  if (action.type === 'notices-read') {
+    if (!state.notices.some((n) => !n.read)) return state
+    return { ...state, notices: state.notices.map((n) => (n.read ? n : { ...n, read: true })) }
   }
   if (action.type === 'event') {
     const id = action.runId
     const prev = state.projects[id] || { ...initialState, runId: id }
     const next = reducer(prev, action)
     if (next === prev && state.projects[id]) return state
+
+    let notices = state.notices
+    const notice = noticeFor(action.event, next)
+    if (notice) {
+      notices = [
+        {
+          id: `${id}-${action.event.seq}`,
+          runId: id,
+          ts: action.event.ts,
+          read: Date.now() - action.event.ts > 10_000,
+          ...notice,
+        },
+        ...notices,
+      ].slice(0, 30)
+    }
+
     return {
       projects: { ...state.projects, [id]: next },
       order: state.projects[id] ? state.order : [id, ...state.order],
+      notices,
     }
   }
   return state
@@ -70,7 +116,8 @@ export function reducer(state, action) {
 
   switch (type) {
     case 'run_started':
-      return { ...state, status: 'composing', idea: data.idea, capUsd: data.capUsd, provider: data.provider }
+      // Status arrives via explicit run_status events (intake → composing → …).
+      return { ...state, idea: data.idea, capUsd: data.capUsd, provider: data.provider }
 
     case 'run_status':
       return { ...state, status: data.status }
@@ -97,6 +144,30 @@ export function reducer(state, action) {
 
     case 'coo_narration':
       return { ...state, stream: [...state.stream, { kind: 'narration', seq, ts, text: data.text }] }
+
+    case 'ceo_says':
+      return { ...state, stream: [...state.stream, { kind: 'ceo', seq, ts, text: data.text }] }
+
+    // Internal org traffic: every briefing down and work product back up lands
+    // in BOTH parties' threads — the agent inspector renders these.
+    case 'agent_msg': {
+      const msg = { seq, ts, ...data }
+      const msgs = { ...state.msgs }
+      for (const id of new Set([data.fromId, data.toId])) {
+        if (!id || id === 'ceo') continue
+        msgs[id] = [...(msgs[id] || []), msg].slice(-120)
+      }
+      return { ...state, msgs }
+    }
+
+    case 'agent_says':
+      return {
+        ...state,
+        stream: [
+          ...state.stream,
+          { kind: 'agent', seq, ts, name: data.name, title: data.title, text: data.text },
+        ],
+      }
 
     case 'needs_approval':
       return {
@@ -144,6 +215,10 @@ export function reducer(state, action) {
         artifactOrder: state.artifactOrder.includes(data.artifact.id)
           ? state.artifactOrder
           : [...state.artifactOrder, data.artifact.id],
+        // Fresh deliverables also land as an embed in the Dash-AI stream.
+        stream: state.artifactOrder.includes(data.artifact.id)
+          ? state.stream
+          : [...state.stream, { kind: 'artifact', seq, ts, artifactId: data.artifact.id }],
       }
 
     case 'spend_tick': {

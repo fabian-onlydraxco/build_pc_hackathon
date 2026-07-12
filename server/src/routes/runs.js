@@ -3,7 +3,7 @@ import { PROVIDER, AUTONOMY } from '../config.js'
 import { round } from '../core/burn.js'
 import { createRun, runs, publicAgent, narrate, logAgent } from '../core/run.js'
 import { sseHandler } from '../core/bus.js'
-import { startRun, killRun, resumeRun, proposeHire, executeHire } from '../core/orchestrator.js'
+import { startIntake, beginBuild, killRun, resumeRun, proposeHire, executeHire, directTask, instructRun } from '../core/orchestrator.js'
 import { resolveApproval } from '../core/gates.js'
 import { saveFixture, loadFixture, listFixtures } from '../replay/recorder.js'
 import { startReplay, replayDecision, replayKill, replayResume } from '../replay/replayer.js'
@@ -46,8 +46,17 @@ router.post('/runs', (req, res) => {
 
   if (!String(idea).trim()) return res.status(400).json({ error: 'Type an idea first.' })
   const run = createRun({ idea: String(idea).trim(), mode: 'live' })
-  startRun(run) // fire and stream — the SSE channel carries everything else
+  startIntake(run) // COO scopes the brief first; the build starts on confirm/"start"
   res.json({ runId: run.id, mode: 'live', provider: PROVIDER })
+})
+
+// CEO skips (or concludes) the intake interview — build with what we have.
+router.post('/runs/:id/build', (req, res) => {
+  const run = getRun(req, res)
+  if (!run) return
+  if (run.mode === 'replay' || !run.intake?.active) return res.json({ ok: false })
+  narrate(run, 'Starting the build on your signal.')
+  res.json(beginBuild(run))
 })
 
 function getRun(req, res) {
@@ -130,9 +139,43 @@ router.post('/runs/:id/instruct', (req, res) => {
   if (!run) return
   const text = String(req.body?.text || '').trim()
   if (!text) return res.status(400).json({ error: 'Empty instruction' })
-  run.instructions.push(text)
-  narrate(run, `Noted, CEO — "${text}". I'll steer the team accordingly.`)
-  res.json({ ok: true })
+
+  if (run.mode === 'replay') {
+    // Theatrical branch — replays never touch the network.
+    run.instructions.push(text)
+    run.bus.emit('ceo_says', { text })
+    setTimeout(() => narrate(run, `Noted, CEO — "${text}". I'll steer the team accordingly.`), 900)
+    return res.json({ ok: true })
+  }
+
+  res.json(instructRun(run, text)) // COO answers over SSE with a real model call
+})
+
+router.post('/runs/:id/direct', (req, res) => {
+  const run = getRun(req, res)
+  if (!run) return
+  const { chiefId = '', text = '' } = req.body || {}
+  if (!String(text).trim()) return res.status(400).json({ error: 'Empty order' })
+
+  if (run.mode === 'replay') {
+    // Theatrical branch — no real agents behind a replay.
+    run.bus.emit('ceo_says', { text: String(text).trim() })
+    setTimeout(() => {
+      run.bus.emit('agent_says', {
+        agentId: chiefId,
+        name: 'Officer',
+        title: 'Direct line',
+        text: `On it, CEO — handling "${String(text).trim()}" right away. Consider it done.`,
+      })
+    }, 1200)
+    return res.json({ ok: true })
+  }
+
+  try {
+    res.json(directTask(run, { chiefId, text: String(text).trim() }))
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
 })
 
 router.post('/runs/:id/hire-propose', async (req, res) => {

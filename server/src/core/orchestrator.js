@@ -9,6 +9,10 @@ import {
   revisePrompt,
   execSummaryPrompt,
   hireProposePrompt,
+  directPrompt,
+  cooReplyPrompt,
+  intakeOpenPrompt,
+  intakeReplyPrompt,
   extractJson,
 } from '../llm/prompts.js'
 import { draftProposal } from '../llm/hireDraft.js'
@@ -101,6 +105,24 @@ async function reserveWithinEnvelope(run, chief) {
 
 // ------------------------------------------------------------------- llm calls
 
+// Every model call is a conversation inside the org: a briefing goes DOWN to
+// the agent, the finished work comes BACK up. Who "sends" the briefing depends
+// on the chain of command — this is what each agent's comms thread renders.
+const CEO_PARTY = { id: 'ceo', name: 'You (CEO)' }
+
+function assignerOf(run, agent, stage) {
+  if (['direct', 'instruct', 'intake', 'hire-propose'].includes(stage)) return CEO_PARTY
+  if (agent.tier === 'employee') {
+    const chief = run.agents.get(agent.parentId)
+    if (chief) return { id: chief.id, name: chief.name }
+  }
+  if (agent.tier === 'chief') {
+    const coo = run.agents.get('coo')
+    return { id: 'coo', name: coo?.name || 'Atlas' }
+  }
+  return CEO_PARTY // the COO answers to the CEO
+}
+
 async function callLLM(run, agent, stage, { prompt, maxTokens = 2500, meta = {}, skipEnvelope = false }) {
   await ensureRunCap(run)
   const dept = agent.tier === 'employee' ? run.agents.get(agent.parentId) : agent.tier === 'chief' ? agent : null
@@ -108,6 +130,16 @@ async function callLLM(run, agent, stage, { prompt, maxTokens = 2500, meta = {},
   // approval. It still burns real, visible spend and respects the run cap.
   const reserved = Boolean(dept && !skipEnvelope)
   if (reserved) await reserveWithinEnvelope(run, dept)
+  const assigner = assignerOf(run, agent, stage)
+  run.bus.emit('agent_msg', {
+    kind: 'brief',
+    stage,
+    fromId: assigner.id,
+    fromName: assigner.name,
+    toId: agent.id,
+    toName: agent.name,
+    text: prompt,
+  })
   try {
     const res = await complete({
       tier: agent.tier,
@@ -124,6 +156,15 @@ async function callLLM(run, agent, stage, { prompt, maxTokens = 2500, meta = {},
       },
     })
     recordSpend(run, agent, res.model, res.usage)
+    run.bus.emit('agent_msg', {
+      kind: 'work',
+      stage,
+      fromId: agent.id,
+      fromName: agent.name,
+      toId: assigner.id,
+      toName: assigner.name,
+      text: res.text,
+    })
     return res.text
   } finally {
     if (reserved) dept.reservedUsd = Math.max(0, dept.reservedUsd - CAPS.estimatedCallUsd)
@@ -214,7 +255,10 @@ function finalizeArtifact(run, chief, artifact) {
 
 export async function startRun(run) {
   try {
-    run.bus.emit('run_started', { idea: run.idea, mode: run.mode, capUsd: run.capUsd, provider: PROVIDER })
+    if (!run.announced) {
+      run.announced = true
+      run.bus.emit('run_started', { idea: run.idea, mode: run.mode, capUsd: run.capUsd, provider: PROVIDER })
+    }
     run.status = 'composing'
     emitRunStatus(run)
     narrate(run, 'Reading your idea. Composing the smallest company that can ship it…')
@@ -388,7 +432,15 @@ async function runChief(run, chief) {
       finalizeArtifact(run, chief, artifact)
       pipeline.artifact = artifact
       setStatus(run, chief, 'done')
-      narrate(run, `${chief.title} delivered: ${artifact.title}.`)
+      // Progress report with every delivery — the CEO always knows the score.
+      const allChiefs = [...run.agents.values()].filter((a) => a.tier === 'chief')
+      const doneCount = allChiefs.filter((c) => c.pipeline?.artifact).length
+      const remaining = allChiefs.filter((c) => !c.pipeline?.artifact).map((c) => c.title)
+      narrate(
+        run,
+        `${chief.title} delivered: ${artifact.title}. That's ${doneCount} of ${allChiefs.length} departments in` +
+          (remaining.length ? ` — still working: ${remaining.join(', ')}.` : ' — every department has delivered. Assembling your package.'),
+      )
     }
 
     await maybeDeliver(run)
@@ -563,6 +615,189 @@ export function executeHire(run, { chiefId, proposal, scope = 'project' }) {
   return { agentId: id }
 }
 
+// ---------------------------------------------------------------- CEO intake
+
+// New projects open with a short interview: the COO makes sure a (possibly
+// first-time) CEO's idea is actually understood before any company is built —
+// ask the sharpest questions, suggest defaults, confirm. Never assume.
+export function startIntake(run) {
+  run.intake = { active: true, log: [] }
+  run.announced = true
+  run.bus.emit('run_started', { idea: run.idea, mode: run.mode, capUsd: run.capUsd, provider: PROVIDER })
+  run.status = 'intake'
+  emitRunStatus(run)
+
+  const coo = makeAgent(run, {
+    id: 'coo',
+    tier: 'coo',
+    title: 'Chief Operating Officer',
+    name: 'Atlas',
+    persona: 'Calm, decisive, allergic to waste. Orchestrates the company and answers only to the CEO.',
+  })
+  addAgent(run, coo)
+  narrate(run, 'Before I build anything — a quick brief so we start this right. Answer what you can, or say "start" and I\'ll run with sensible defaults.')
+
+  ;(async () => {
+    try {
+      setStatus(run, coo, 'thinking')
+      const text = await callLLM(run, coo, 'intake', {
+        prompt: intakeOpenPrompt(run.idea),
+        maxTokens: 500,
+        meta: { turns: 0 },
+      })
+      run.intake.log.push({ role: 'coo', text })
+      run.bus.emit('agent_says', { agentId: coo.id, name: coo.name, title: 'COO', text })
+      setStatus(run, coo, 'hired')
+    } catch (err) {
+      if (run.killedAt) return
+      run.bus.emit('error', { message: `COO (intake): ${err.message}` })
+      narrate(run, 'I couldn\'t open the brief — tell me about your idea anyway, or say "start" to begin.')
+      setStatus(run, coo, 'hired')
+    }
+  })()
+}
+
+function intakeReply(run, text) {
+  run.bus.emit('ceo_says', { text })
+  const coo = run.agents.get('coo')
+  if (run.killedAt || !coo) {
+    narrate(run, 'The company is frozen — RESUME and we\'ll pick the brief back up.')
+    return { ok: true }
+  }
+  run.intake.log.push({ role: 'ceo', text })
+
+  // The CEO can always cut the interview short.
+  if (/^\s*(start|go|begin|build|proceed|run it|just start|start now)\b/i.test(text)) {
+    narrate(run, 'Say no more. Locking the brief and building your company now.')
+    beginBuild(run)
+    return { ok: true }
+  }
+
+  ;(async () => {
+    try {
+      setStatus(run, coo, 'thinking')
+      const raw = await callLLM(run, coo, 'intake', {
+        prompt: intakeReplyPrompt(run),
+        maxTokens: 700,
+        meta: { turns: run.intake.log.filter((m) => m.role === 'ceo').length, text },
+      })
+      const parsed = await parseJsonWithRepair(run, coo, raw)
+      const reply = String(parsed.reply || raw)
+      run.intake.log.push({ role: 'coo', text: reply })
+      run.bus.emit('agent_says', { agentId: coo.id, name: coo.name, title: 'COO', text: reply })
+      setStatus(run, coo, 'hired')
+      if (parsed.ready) {
+        const brief = Array.isArray(parsed.brief) ? parsed.brief.map(String).filter(Boolean) : []
+        run.instructions.push(...brief)
+        run.intake.briefed = true
+        narrate(run, 'Brief locked. Building your company now.')
+        beginBuild(run)
+      }
+    } catch (err) {
+      if (run.killedAt) {
+        setStatus(run, coo, 'paused')
+        return
+      }
+      run.bus.emit('error', { message: `COO (intake): ${err.message}` })
+      narrate(run, 'I hit a snag processing that — try again, or say "start" to begin with what we have.')
+      setStatus(run, coo, 'hired')
+    }
+  })()
+  return { ok: true }
+}
+
+// Ends the interview and starts the actual build (idempotent). If the CEO
+// skipped ahead before Atlas distilled a brief, their raw intake answers
+// still ride along as standing instructions — nothing they said gets lost.
+export function beginBuild(run) {
+  if (!run.intake?.active) return { ok: false }
+  run.intake.active = false
+  if (!run.intake.briefed) {
+    run.instructions.push(...run.intake.log.filter((m) => m.role === 'ceo').map((m) => m.text))
+  }
+  startRun(run) // fire and stream
+  return { ok: true }
+}
+
+// CEO speaks to the company (no @-tag). During intake this feeds the
+// interview; afterwards the instruction is stored so every subsequent prompt
+// carries it, and the COO answers with a REAL model call — never a canned
+// acknowledgment. CEO-initiated → no envelope gate.
+export function instructRun(run, text) {
+  if (run.intake?.active) return intakeReply(run, text)
+  run.instructions.push(text)
+  run.bus.emit('ceo_says', { text })
+
+  const coo = run.agents.get('coo')
+  if (run.killedAt || !coo) {
+    narrate(run, `Noted — "${text}" is on file. The company is ${run.killedAt ? 'frozen; RESUME and' : 'still forming;'} the team will pick it up.`)
+    return { ok: true }
+  }
+
+  logAgent(run, coo, `CEO instruction: ${text}`)
+  const previousStatus = coo.status
+
+  ;(async () => {
+    try {
+      setStatus(run, coo, 'thinking')
+      const output = await callLLM(run, coo, 'instruct', {
+        prompt: cooReplyPrompt(run, text),
+        maxTokens: 500,
+        meta: { text },
+        skipEnvelope: true,
+      })
+      run.bus.emit('agent_says', { agentId: coo.id, name: coo.name, title: 'COO', text: output })
+      setStatus(run, coo, previousStatus === 'thinking' ? 'thinking' : previousStatus || 'done')
+    } catch (err) {
+      if (run.killedAt) {
+        setStatus(run, coo, 'paused')
+        return
+      }
+      run.bus.emit('error', { message: `COO (instruction): ${err.message}` })
+      narrate(run, `Your note "${text}" is logged and will steer the team — but my reply failed (${err.message}).`)
+      setStatus(run, coo, previousStatus || 'done')
+    }
+  })()
+
+  return { ok: true }
+}
+
+// CEO @-tags an officer: the order skips the chain, the officer answers
+// directly in the command stream. CEO-initiated → no envelope gate, but
+// still metered and run-cap-checked.
+export function directTask(run, { chiefId, text }) {
+  const chief = run.agents.get(chiefId)
+  if (!chief) throw new Error('No such agent')
+
+  run.bus.emit('ceo_says', { text: `@${chief.name} ${text}` })
+  logAgent(run, chief, `Direct order from the CEO: ${text}`)
+  const previousStatus = chief.status
+
+  ;(async () => {
+    try {
+      setStatus(run, chief, 'thinking')
+      const output = await callLLM(run, chief, 'direct', {
+        prompt: directPrompt(run, chief, text),
+        maxTokens: 900,
+        meta: { text },
+        skipEnvelope: true,
+      })
+      run.bus.emit('agent_says', { agentId: chief.id, name: chief.name, title: chief.title, text: output })
+      logAgent(run, chief, 'Direct order completed')
+      setStatus(run, chief, previousStatus === 'thinking' ? 'thinking' : previousStatus || 'done')
+    } catch (err) {
+      if (run.killedAt) {
+        setStatus(run, chief, 'paused')
+        return
+      }
+      run.bus.emit('error', { message: `${chief.title} (direct order): ${err.message}`, agentId: chief.id })
+      setStatus(run, chief, previousStatus || 'done')
+    }
+  })()
+
+  return { ok: true }
+}
+
 // ---------------------------------------------------------------- kill / resume
 
 export function killRun(run) {
@@ -585,6 +820,12 @@ export async function resumeRun(run) {
   run.bus.emit('run_resumed', {})
   narrate(run, 'Back to work.')
 
+  if (run.intake?.active) {
+    run.status = 'intake'
+    emitRunStatus(run)
+    narrate(run, 'Back to the brief — answer on, or say "start".')
+    return
+  }
   if (!run.orgPlanned) return startRun(run)
 
   run.status = 'working'
