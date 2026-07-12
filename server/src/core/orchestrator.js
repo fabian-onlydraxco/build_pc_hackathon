@@ -13,6 +13,7 @@ import {
   cooReplyPrompt,
   intakeOpenPrompt,
   intakeReplyPrompt,
+  appointCooPrompt,
   extractJson,
 } from '../llm/prompts.js'
 import { draftProposal } from '../llm/hireDraft.js'
@@ -49,7 +50,7 @@ async function ensureRunCap(run) {
       category: 'runcap',
       agentId: 'coo',
       title: 'Company spend cap reached',
-      body: `Atlas: "Total agent labor has reached your run cap ($${run.capUsd.toFixed(2)}). Raise it by $0.50 to finish properly, or hold it and I'll wrap up lean."`,
+      body: `${run.agents.get('coo')?.name || 'Glyde AI'}: "Total agent labor has reached your run cap ($${run.capUsd.toFixed(2)}). Raise it by $0.50 to finish properly, or hold it and I'll wrap up lean."`,
       costUsd: 0.5,
     })
     if (decision.approved) {
@@ -111,16 +112,21 @@ async function reserveWithinEnvelope(run, chief) {
 const CEO_PARTY = { id: 'ceo', name: 'You (CEO)' }
 
 function assignerOf(run, agent, stage) {
-  if (['direct', 'instruct', 'intake', 'hire-propose'].includes(stage)) return CEO_PARTY
+  if (['direct', 'instruct', 'intake', 'appoint', 'hire-propose'].includes(stage)) return CEO_PARTY
   if (agent.tier === 'employee') {
     const chief = run.agents.get(agent.parentId)
     if (chief) return { id: chief.id, name: chief.name }
   }
   if (agent.tier === 'chief') {
     const coo = run.agents.get('coo')
-    return { id: 'coo', name: coo?.name || 'Atlas' }
+    return { id: 'coo', name: coo?.name || 'the COO' }
   }
-  return CEO_PARTY // the COO answers to the CEO
+  // COO-level work (compose/exec) is briefed by Glyde AI — the platform layer
+  // that appointed them. Everything else at the top answers to the CEO.
+  if (agent.tier === 'coo' && run.agents.has('glyde')) {
+    return { id: 'glyde', name: 'Glyde AI' }
+  }
+  return CEO_PARTY
 }
 
 async function callLLM(run, agent, stage, { prompt, maxTokens = 2500, meta = {}, skipEnvelope = false }) {
@@ -204,8 +210,8 @@ function normalizeOrg(org) {
     })),
   }))
 
-  // Enforce the total agent cap: 1 COO + chiefs + employees ≤ maxAgents.
-  let total = 1 + chiefs.length + chiefs.reduce((n, c) => n + c.hires.length, 0)
+  // Enforce the total agent cap: Glyde AI + COO + chiefs + employees ≤ maxAgents.
+  let total = 2 + chiefs.length + chiefs.reduce((n, c) => n + c.hires.length, 0)
   for (let i = chiefs.length - 1; total > CAPS.maxAgents && i >= 0; i--) {
     while (total > CAPS.maxAgents && chiefs[i].hires.length > 1) {
       chiefs[i].hires.pop()
@@ -253,6 +259,56 @@ function finalizeArtifact(run, chief, artifact) {
 
 // -------------------------------------------------------------------- pipeline
 
+// Glyde AI appoints this project's COO: a real model call invents an operator
+// whose name and persona fit the locked brief. The COO owns everything from
+// here — org design, hiring, budgets. Falls back to a steady default rather
+// than ever blocking the build.
+async function appointCoo(run) {
+  let glyde = run.agents.get('glyde')
+  if (!glyde) {
+    // Legacy/edge path (e.g. resumed pre-intake runs): the platform layer
+    // still exists so the chain of command reads the same everywhere.
+    glyde = makeAgent(run, { id: 'glyde', tier: 'glyde', title: 'Main Floor', name: 'Glyde AI' })
+    addAgent(run, glyde)
+  }
+
+  let picked = null
+  try {
+    setStatus(run, glyde, 'thinking')
+    const text = await callLLM(run, glyde, 'appoint', {
+      prompt: appointCooPrompt(run),
+      maxTokens: 400,
+    })
+    const raw = await parseJsonWithRepair(run, glyde, text)
+    if (raw && String(raw.name || '').trim()) {
+      picked = {
+        name: String(raw.name).trim(),
+        persona: String(raw.persona || '').trim(),
+        why: String(raw.why || '').trim(),
+      }
+    }
+  } catch (err) {
+    if (isAbort(err)) throw err
+    // Appointment is theater-critical but never build-critical.
+  } finally {
+    setStatus(run, glyde, 'hired')
+  }
+
+  const coo = makeAgent(run, {
+    id: 'coo',
+    tier: 'coo',
+    title: 'Chief Operating Officer',
+    name: picked?.name || 'Atlas',
+    persona:
+      picked?.persona || 'Calm, decisive, allergic to waste. Orchestrates the company and answers only to the CEO.',
+  })
+  addAgent(run, coo)
+  logAgent(run, glyde, `Appointed ${coo.name} as COO`)
+  logAgent(run, coo, 'Appointed by Glyde AI — this project is mine to run')
+  narrate(run, `Glyde AI appointed ${coo.name} as COO${picked?.why ? ` — ${picked.why}` : '.'}`)
+  return coo
+}
+
 export async function startRun(run) {
   try {
     if (!run.announced) {
@@ -261,24 +317,15 @@ export async function startRun(run) {
     }
     run.status = 'composing'
     emitRunStatus(run)
-    narrate(run, 'Reading your idea. Composing the smallest company that can ship it…')
 
     let coo = run.agents.get('coo')
-    if (!coo) {
-      coo = makeAgent(run, {
-        id: 'coo',
-        tier: 'coo',
-        title: 'Chief Operating Officer',
-        name: 'Atlas',
-        persona: 'Calm, decisive, allergic to waste. Orchestrates the company and answers only to the CEO.',
-      })
-      addAgent(run, coo)
-    }
+    if (!coo) coo = await appointCoo(run)
     setStatus(run, coo, 'thinking')
+    narrate(run, `${coo.name} is reading the brief and composing the smallest company that can ship it…`)
 
     if (!run.orgPlanned) {
       const text = await callLLM(run, coo, 'compose', {
-        prompt: composePrompt(run.idea, run.instructions),
+        prompt: composePrompt(run.idea, run.instructions, coo),
         maxTokens: 3000,
       })
       run.org = attachRosterHires(normalizeOrg(await parseJsonWithRepair(run, coo, text)))
@@ -470,7 +517,7 @@ async function maybeDeliver(run) {
     setStatus(run, coo, 'thinking')
     logAgent(run, coo, 'Writing the executive summary')
     const text = await callLLM(run, coo, 'exec', {
-      prompt: execSummaryPrompt(run, [...run.artifacts.values()]),
+      prompt: execSummaryPrompt(run, [...run.artifacts.values()], coo),
       maxTokens: 900,
     })
     const artifact = {
@@ -510,7 +557,7 @@ export async function proposeHire(run, { chiefId, chiefTitle = '', description, 
   const title = chief?.title || chiefTitle || 'the department'
   if (run.mode === 'replay') return draftProposal(description, title, notes)
 
-  const speaker = chief || run.agents.get('coo')
+  const speaker = chief || run.agents.get('coo') || run.agents.get('glyde')
   if (!speaker) return draftProposal(description, title, notes)
 
   try {
@@ -617,9 +664,11 @@ export function executeHire(run, { chiefId, proposal, scope = 'project' }) {
 
 // ---------------------------------------------------------------- CEO intake
 
-// New projects open with a short interview: the COO makes sure a (possibly
-// first-time) CEO's idea is actually understood before any company is built —
-// ask the sharpest questions, suggest defaults, confirm. Never assume.
+// New projects open with a short interview: Glyde AI — the platform's main
+// floor, the layer between the CEO and every company it spins up — makes sure
+// a (possibly first-time) CEO's idea is actually understood before anything
+// is built. Ask the sharpest questions, suggest defaults, confirm. Never
+// assume. Once the brief locks, Glyde AI appoints a bespoke COO to run it.
 export function startIntake(run) {
   run.intake = { active: true, log: [] }
   run.announced = true
@@ -627,40 +676,41 @@ export function startIntake(run) {
   run.status = 'intake'
   emitRunStatus(run)
 
-  const coo = makeAgent(run, {
-    id: 'coo',
-    tier: 'coo',
-    title: 'Chief Operating Officer',
-    name: 'Atlas',
-    persona: 'Calm, decisive, allergic to waste. Orchestrates the company and answers only to the CEO.',
+  const glyde = makeAgent(run, {
+    id: 'glyde',
+    tier: 'glyde',
+    title: 'Main Floor',
+    name: 'Glyde AI',
+    persona:
+      'The platform\'s executive intelligence — the main floor between the CEO and every company it spins up. Scopes each idea, appoints and briefs the right COO, and keeps the CEO informed.',
   })
-  addAgent(run, coo)
-  narrate(run, 'Before I build anything — a quick brief so we start this right. Answer what you can, or say "start" and I\'ll run with sensible defaults.')
+  addAgent(run, glyde)
+  narrate(run, 'Glyde here. Before I appoint anyone — a quick brief so we start this right. Answer what you can, or say "start" and I\'ll run with sensible defaults.')
 
   ;(async () => {
     try {
-      setStatus(run, coo, 'thinking')
-      const text = await callLLM(run, coo, 'intake', {
+      setStatus(run, glyde, 'thinking')
+      const text = await callLLM(run, glyde, 'intake', {
         prompt: intakeOpenPrompt(run.idea),
         maxTokens: 500,
         meta: { turns: 0 },
       })
       run.intake.log.push({ role: 'coo', text })
-      run.bus.emit('agent_says', { agentId: coo.id, name: coo.name, title: 'COO', text })
-      setStatus(run, coo, 'hired')
+      run.bus.emit('agent_says', { agentId: glyde.id, name: glyde.name, title: glyde.title, text })
+      setStatus(run, glyde, 'hired')
     } catch (err) {
       if (run.killedAt) return
-      run.bus.emit('error', { message: `COO (intake): ${err.message}` })
+      run.bus.emit('error', { message: `Glyde AI (intake): ${err.message}` })
       narrate(run, 'I couldn\'t open the brief — tell me about your idea anyway, or say "start" to begin.')
-      setStatus(run, coo, 'hired')
+      setStatus(run, glyde, 'hired')
     }
   })()
 }
 
 function intakeReply(run, text) {
   run.bus.emit('ceo_says', { text })
-  const coo = run.agents.get('coo')
-  if (run.killedAt || !coo) {
+  const glyde = run.agents.get('glyde')
+  if (run.killedAt || !glyde) {
     narrate(run, 'The company is frozen — RESUME and we\'ll pick the brief back up.')
     return { ok: true }
   }
@@ -668,46 +718,46 @@ function intakeReply(run, text) {
 
   // The CEO can always cut the interview short.
   if (/^\s*(start|go|begin|build|proceed|run it|just start|start now)\b/i.test(text)) {
-    narrate(run, 'Say no more. Locking the brief and building your company now.')
+    narrate(run, 'Say no more. Locking the brief and appointing your COO now.')
     beginBuild(run)
     return { ok: true }
   }
 
   ;(async () => {
     try {
-      setStatus(run, coo, 'thinking')
-      const raw = await callLLM(run, coo, 'intake', {
+      setStatus(run, glyde, 'thinking')
+      const raw = await callLLM(run, glyde, 'intake', {
         prompt: intakeReplyPrompt(run),
         maxTokens: 700,
         meta: { turns: run.intake.log.filter((m) => m.role === 'ceo').length, text },
       })
-      const parsed = await parseJsonWithRepair(run, coo, raw)
+      const parsed = await parseJsonWithRepair(run, glyde, raw)
       const reply = String(parsed.reply || raw)
       run.intake.log.push({ role: 'coo', text: reply })
-      run.bus.emit('agent_says', { agentId: coo.id, name: coo.name, title: 'COO', text: reply })
-      setStatus(run, coo, 'hired')
+      run.bus.emit('agent_says', { agentId: glyde.id, name: glyde.name, title: glyde.title, text: reply })
+      setStatus(run, glyde, 'hired')
       if (parsed.ready) {
         const brief = Array.isArray(parsed.brief) ? parsed.brief.map(String).filter(Boolean) : []
         run.instructions.push(...brief)
         run.intake.briefed = true
-        narrate(run, 'Brief locked. Building your company now.')
+        narrate(run, 'Brief locked. Appointing your COO and building the company now.')
         beginBuild(run)
       }
     } catch (err) {
       if (run.killedAt) {
-        setStatus(run, coo, 'paused')
+        setStatus(run, glyde, 'paused')
         return
       }
-      run.bus.emit('error', { message: `COO (intake): ${err.message}` })
+      run.bus.emit('error', { message: `Glyde AI (intake): ${err.message}` })
       narrate(run, 'I hit a snag processing that — try again, or say "start" to begin with what we have.')
-      setStatus(run, coo, 'hired')
+      setStatus(run, glyde, 'hired')
     }
   })()
   return { ok: true }
 }
 
 // Ends the interview and starts the actual build (idempotent). If the CEO
-// skipped ahead before Atlas distilled a brief, their raw intake answers
+// skipped ahead before Glyde AI distilled a brief, their raw intake answers
 // still ride along as standing instructions — nothing they said gets lost.
 export function beginBuild(run) {
   if (!run.intake?.active) return { ok: false }
@@ -741,7 +791,7 @@ export function instructRun(run, text) {
     try {
       setStatus(run, coo, 'thinking')
       const output = await callLLM(run, coo, 'instruct', {
-        prompt: cooReplyPrompt(run, text),
+        prompt: cooReplyPrompt(run, coo, text),
         maxTokens: 500,
         meta: { text },
         skipEnvelope: true,
@@ -837,7 +887,7 @@ export async function resumeRun(run) {
   )
   for (const agent of run.agents.values()) {
     if (agent.status === 'paused' && (agent.tier !== 'chief' || agent.inFlight)) {
-      setStatus(run, agent, agent.tier === 'employee' ? 'hired' : 'waiting')
+      setStatus(run, agent, agent.tier === 'employee' || agent.tier === 'glyde' ? 'hired' : 'waiting')
     }
   }
   await Promise.allSettled(pending.map((chief) => runChief(run, chief)))

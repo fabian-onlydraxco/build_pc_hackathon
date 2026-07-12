@@ -17,6 +17,7 @@ const STAGE_WORD = {
   direct: 'direct order',
   instruct: 'CEO note',
   intake: 'project brief',
+  appoint: 'COO appointment',
   'hire-propose': 'hire draft',
   repair: 'fix-up',
 }
@@ -110,7 +111,7 @@ export default function AgentInspector({ agent, dept, msgs = [], onClose, onUpda
           </div>
         </div>
 
-        {agent.tier !== 'employee' && (
+        {agent.tier !== 'employee' && agent.tier !== 'glyde' && (
           <div className="field">
             <span className="label">Autonomy</span>
             <div className="autonomy" role="radiogroup" aria-label="Autonomy level">

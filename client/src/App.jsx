@@ -7,6 +7,7 @@ import Sidebar from './components/Sidebar.jsx'
 import TopBar from './components/TopBar.jsx'
 import DashView from './components/dash/DashView.jsx'
 import ControlView from './components/control/ControlView.jsx'
+import OnboardingSplash from './components/OnboardingSplash.jsx'
 
 export default function App() {
   const [{ projects, order, notices }, dispatch] = useReducer(projectsReducer, projectsInitial)
@@ -16,6 +17,13 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [noticesOpen, setNoticesOpen] = useState(false)
   const [toast, setToast] = useState(null)
+  const [showGuide, setShowGuide] = useState(() => {
+    try {
+      return !localStorage.getItem('glyde-onboarded')
+    } catch {
+      return true
+    }
+  })
   const [pins, setPins] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('glyde-pins')) || []
@@ -55,6 +63,15 @@ export default function App() {
     setToast(text)
     clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), 1800)
+  }, [])
+
+  const closeGuide = useCallback(() => {
+    try {
+      localStorage.setItem('glyde-onboarded', '1')
+    } catch {
+      // private mode etc. — tour just reappears next visit
+    }
+    setShowGuide(false)
   }, [])
 
   // Stage lifeline: Ctrl+Shift+L flips the NEXT run between live and replay.
@@ -222,6 +239,7 @@ export default function App() {
           unread={unread}
           noticesOpen={noticesOpen}
           onToggleNotices={toggleNotices}
+          onOpenGuide={() => setShowGuide(true)}
         />
         {section === 'dash' ? (
           <DashView
@@ -286,6 +304,7 @@ export default function App() {
         </div>
       )}
       {toast && <div className="toast">{toast}</div>}
+      {showGuide && <OnboardingSplash onClose={closeGuide} />}
     </div>
   )
 }

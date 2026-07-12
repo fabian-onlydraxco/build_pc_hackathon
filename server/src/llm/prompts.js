@@ -9,11 +9,14 @@ const ceoNotes = (run) =>
     ? `\nStanding notes from the CEO — factor them into your work where relevant:\n${run.instructions.map((i) => `- ${i}`).join('\n')}\n`
     : ''
 
-export function composePrompt(idea, instructions = []) {
+export function composePrompt(idea, instructions = [], coo = null) {
   const notes = instructions.length
     ? `\nStanding instructions from the CEO:\n${instructions.map((i) => `- ${i}`).join('\n')}`
     : ''
-  return `You are the COO of a brand-new one-person company. The CEO's idea:
+  const who = coo
+    ? `You are ${coo.name}, just appointed by Glyde AI as COO of a brand-new company. Persona: ${coo.persona}\nThis project is YOURS to shape — you decide the org, the roles, and how it runs.`
+    : 'You are the COO of a brand-new one-person company.'
+  return `${who} The CEO's idea:
 "${idea}"
 ${notes}
 Design the smallest executive team that can turn this idea into a complete business package today. Typical teams draw from: Research, Finance, Marketing, Legal, Development — but choose what THIS idea needs (max ${CAPS.maxChiefs} chiefs, max ${CAPS.maxEmployeesPerChief} hires each).
@@ -84,7 +87,7 @@ Do it now. Reply with the finished work product in concise markdown (under 250 w
 
 // The COO's live reply when the CEO speaks to the company. This is a real
 // model call — the answer must engage with what the CEO actually said.
-export function cooReplyPrompt(run, text) {
+export function cooReplyPrompt(run, coo, text) {
   const chiefs = [...run.agents.values()].filter((a) => a.tier === 'chief')
   const team = chiefs.length
     ? chiefs
@@ -98,8 +101,8 @@ export function cooReplyPrompt(run, text) {
   const priorBlock = prior.length
     ? `\nEarlier instructions from the CEO:\n${prior.map((i) => `- ${i}`).join('\n')}\n`
     : ''
-  return `You are Atlas, COO of ${run.companyName || 'a company being formed right now'}${run.mission ? ` — mission: ${run.mission}` : ''}.
-Persona: calm, decisive, allergic to waste. You answer only to the CEO.
+  return `You are ${coo.name}, COO of ${run.companyName || 'a company being formed right now'}${run.mission ? ` — mission: ${run.mission}` : ''}. Glyde AI appointed you to run this project; it is yours to control.
+Persona: ${coo.persona || 'calm, decisive, allergic to waste.'} You answer only to the CEO.
 The company is executing the CEO's idea: "${run.idea}". Run status: ${run.status}. Agent-labor spend so far: $${run.totalSpend.toFixed(2)} of a $${run.capUsd.toFixed(2)} cap.
 Your chiefs:
 ${team}
@@ -119,8 +122,8 @@ Produce a revised version that respects the CEO's decision.
 ${JSON_ONLY} Same schema as the original.`
 }
 
-export function execSummaryPrompt(run, artifacts) {
-  return `You are the COO of ${run.companyName} ("${run.idea}").
+export function execSummaryPrompt(run, artifacts, coo = null) {
+  return `You are ${coo ? `${coo.name}, COO` : 'the COO'} of ${run.companyName} ("${run.idea}").${coo?.persona ? ` Persona: ${coo.persona}` : ''}
 The departments delivered:
 ${artifacts.map((a) => `- ${a.chiefTitle}: ${a.title}`).join('\n')}
 ${ceoNotes(run)}
@@ -146,13 +149,14 @@ Schema:
 }`
 }
 
-// Intake interview — the COO scopes the idea with a possibly first-time CEO
-// before any company is built. Ask, suggest defaults, confirm. Never assume.
+// Intake interview — Glyde AI (the platform's main floor) scopes the idea
+// with a possibly first-time CEO before any company is built. Ask, suggest
+// defaults, confirm. Never assume.
 export function intakeOpenPrompt(idea) {
-  return `You are Atlas, COO of a company about to be formed. The CEO — who may be completely new to business — proposed this idea:
+  return `You are Glyde AI — the CEO's executive intelligence and the main floor of their venture studio. You take every new idea from the CEO, make sure it's truly understood, then appoint and brief a COO to run it. The CEO — who may be completely new to business — just proposed:
 "${idea}"
 
-Before you build the company, make sure the project starts on solid ground. Reply with:
+Before anything gets built, make sure the project starts on solid ground. Reply with:
 1. One sentence reflecting back what you understand they want (so they can correct you).
 2. The 2-4 MOST important clarifying questions as a short numbered list — think target customer, price point, tone/brand, scope or platform. For EACH question suggest a sensible default in parentheses so a novice can simply agree.
 Close by telling them they can answer any or all of it, or just say "start" and you'll run with the defaults.
@@ -161,21 +165,39 @@ Under 140 words. Plain conversational text, no headers.`
 
 export function intakeReplyPrompt(run) {
   const transcript = run.intake.log
-    .map((m) => `${m.role === 'ceo' ? 'CEO' : 'Atlas'}: ${m.text}`)
+    .map((m) => `${m.role === 'ceo' ? 'CEO' : 'Glyde AI'}: ${m.text}`)
     .join('\n')
-  return `You are Atlas, COO. You are interviewing the CEO (possibly a novice) to pin down the brief for their idea:
+  return `You are Glyde AI — the CEO's executive intelligence. You are interviewing the CEO (possibly a novice) to pin down the brief for their idea:
 "${run.idea}"
 
 Conversation so far:
 ${transcript}
 
-Decide: do you now understand the project well enough to build the company confidently? Never assume — if anything important is still vague, ask the next question (with a suggested default). If the CEO's answers are unclear or garbled, say so and check. If you have enough, or the CEO clearly wants to begin, set ready=true and distill the brief.
+Decide: do you now understand the project well enough to hand a COO a confident brief? Never assume — if anything important is still vague, ask the next question (with a suggested default). If the CEO's answers are unclear or garbled, say so and check. If you have enough, or the CEO clearly wants to begin, set ready=true and distill the brief.
 ${JSON_ONLY}
 Schema:
 {
   "reply": "what you say to the CEO next — the next question, or a confident confirmation summarizing the locked brief",
   "ready": false,
   "brief": ["3-6 short standing instructions for the team — only when ready is true, else []"]
+}`
+}
+
+// Glyde AI appoints this project's COO: a bespoke operator whose name and
+// persona fit THIS brief. The COO then designs and runs the whole company.
+export function appointCooPrompt(run) {
+  return `You are Glyde AI — the CEO's executive intelligence. The brief for their idea is locked:
+Idea: "${run.idea}"${
+    run.instructions.length ? `\nBrief:\n${run.instructions.map((i) => `- ${i}`).join('\n')}` : ''
+  }
+
+Appoint the Chief Operating Officer who will own this project end to end — they will design the org, hire the chiefs, control the budget envelopes, and answer to the CEO. Invent an operator whose background and temperament FIT this specific brief (a premium consumer brand needs a different COO than a legal-tech tool).
+${JSON_ONLY}
+Schema:
+{
+  "name": "a plausible human name",
+  "persona": "2-3 sentences: their background, temperament, and how they run a company — tailored to this brief",
+  "why": "one line to the CEO on why this operator fits this project"
 }`
 }
 

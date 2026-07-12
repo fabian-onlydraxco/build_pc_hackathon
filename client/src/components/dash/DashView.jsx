@@ -123,7 +123,7 @@ function Running({ state, onDecide, onInstruct, onDirect, onBuild }) {
   // @-tagging: type "@" to pick an officer; the order skips the chain and
   // goes straight to them.
   const officers = Object.values(state.agents).filter(
-    (agent) => agent.tier === 'chief' || agent.tier === 'coo',
+    (agent) => agent.tier === 'chief' || agent.tier === 'coo' || agent.tier === 'glyde',
   )
   const matchOfficer = (text) => {
     if (!text.startsWith('@')) return null
@@ -194,7 +194,7 @@ function Running({ state, onDecide, onInstruct, onDirect, onBuild }) {
                       ? `${item.name} · ${item.title}`
                       : item.kind === 'ceo'
                         ? 'You · CEO'
-                        : 'Atlas · COO'}
+                        : 'Glyde AI'}
                 </div>
                 {item.kind === 'agent' ? (
                   <div
@@ -215,7 +215,7 @@ function Running({ state, onDecide, onInstruct, onDirect, onBuild }) {
       <div className="dash__composer">
         {state.status === 'intake' && (
           <div className="intake">
-            <span className="label">Atlas is scoping your project — answer his questions below, or skip ahead</span>
+            <span className="label">Glyde AI is scoping your project — answer its questions below, or skip ahead</span>
             <button className="btn btn--ink btn--sm" onClick={onBuild}>
               Start building now
             </button>

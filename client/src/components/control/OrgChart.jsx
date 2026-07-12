@@ -29,12 +29,13 @@ function Node({ agent, dept, selected, onSelect, className = '' }) {
 }
 
 export default function OrgChart({ state, selectedId, onSelect, onHire, goDash }) {
+  const glyde = state.agents.glyde
   const coo = state.agents.coo
   const chiefs = state.agentOrder.map((id) => state.agents[id]).filter((agent) => agent?.tier === 'chief')
   const employeesOf = (chiefId) =>
     state.agentOrder.map((id) => state.agents[id]).filter((agent) => agent?.tier === 'employee' && agent.parentId === chiefId)
 
-  if (!coo) {
+  if (!glyde && !coo) {
     return (
       <div className="org">
         <div className="org__empty">
@@ -58,16 +59,33 @@ export default function OrgChart({ state, selectedId, onSelect, onHire, goDash }
         </div>
       </div>
 
-      <div className="org__link" />
+      {glyde && (
+        <>
+          <div className="org__link" />
+          <div className="org__tier">
+            <Node
+              agent={glyde}
+              selected={selectedId === 'glyde'}
+              onSelect={onSelect}
+              className="node--coo"
+            />
+          </div>
+        </>
+      )}
 
-      <div className="org__tier">
-        <Node
-          agent={coo}
-          selected={selectedId === 'coo'}
-          onSelect={onSelect}
-          className="node--coo"
-        />
-      </div>
+      {coo && (
+        <>
+          <div className="org__link" />
+          <div className="org__tier">
+            <Node
+              agent={coo}
+              selected={selectedId === 'coo'}
+              onSelect={onSelect}
+              className="node--coo"
+            />
+          </div>
+        </>
+      )}
 
       {chiefs.length > 0 && <div className="org__link" />}
 

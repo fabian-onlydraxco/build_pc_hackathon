@@ -1,0 +1,182 @@
+/* Onboarding flash cards — first-visit tour. Same monochrome grammar as the
+   artifact modal, one concept per card. */
+
+.ob {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s5);
+  background: rgba(250, 250, 248, 0.86);
+  backdrop-filter: blur(3px);
+  animation: fade 220ms ease-out;
+}
+
+.ob__panel {
+  width: min(520px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-float);
+  padding: var(--s5) var(--s6) var(--s5);
+  animation: rise 260ms var(--ease-out);
+}
+
+.ob__panel:focus {
+  outline: none;
+}
+
+.ob__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ob__count {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+}
+
+.ob__skip {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--g2);
+  padding: 2px 4px;
+  transition: color 140ms ease;
+}
+
+.ob__skip:hover {
+  color: var(--ink);
+}
+
+/* re-keyed on step change → each card animates in */
+.ob__stage {
+  animation: obCardIn 320ms var(--ease-out);
+}
+
+.ob__art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
+  margin: var(--s3) 0 var(--s5);
+  border-bottom: 1px solid var(--line);
+}
+
+.ob__svg {
+  width: 240px;
+  height: 132px;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ob__svg .fill {
+  fill: var(--ink);
+  stroke: none;
+}
+
+.ob__svg .line {
+  fill: var(--line);
+  stroke: none;
+}
+
+.ob__svg .paper {
+  fill: var(--paper);
+  stroke: none;
+}
+
+.ob__svg .soft {
+  stroke: var(--g2);
+}
+
+.ob__svg .dash {
+  stroke-dasharray: 3 4;
+}
+
+.ob__eyebrow {
+  color: var(--g1);
+}
+
+.ob__title {
+  margin-top: var(--s2);
+  font-size: var(--t-xl);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  /* reserve two lines so a 1- vs 2-line title never shifts the card */
+  min-height: 2.25em;
+}
+
+.ob__body {
+  margin-top: var(--s3);
+  color: var(--g1);
+  font-size: var(--t-base);
+  line-height: 1.6;
+  /* reserve four lines (the tallest body) so paging never jumps the nav row */
+  min-height: 6.4em;
+}
+
+.ob__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-top: var(--s5);
+}
+
+.ob__dots {
+  display: flex;
+  gap: 7px;
+}
+
+.ob__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.ob__dot:hover {
+  background: var(--g2);
+}
+
+.ob__dot--on {
+  background: var(--ink);
+  transform: scale(1.25);
+}
+
+.ob__dot--on:hover {
+  background: var(--ink);
+}
+
+.ob__btns {
+  display: flex;
+  gap: var(--s2);
+}
+
+/* the topbar "?" re-opener — same round chip as the bell */
+.help {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+@keyframes obCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

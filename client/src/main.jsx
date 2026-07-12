@@ -12,6 +12,7 @@ import './styles/base.css'
 import './styles/shared.css'
 import './styles/dash.css'
 import './styles/control.css'
+import './styles/onboarding.css'
 
 import App from './App.jsx'
 

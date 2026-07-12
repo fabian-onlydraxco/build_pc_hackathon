@@ -34,7 +34,8 @@ export const PRICES = {
 export const CAPS = {
   maxChiefs: 5,
   maxEmployeesPerChief: 3,
-  maxAgents: 18,
+  maxAgents: 19, // Glyde AI + COO + 5 chiefs + employees — same org capacity as before the platform layer
+
   runCapUsd: 2,
   callTimeoutMs: 240_000,
   defaultChiefBudgetUsd: 0.25,

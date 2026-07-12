@@ -29,6 +29,7 @@ export default function TopBar({
   unread,
   onToggleNotices,
   noticesOpen,
+  onOpenGuide,
 }) {
   const burn = useCountUp(state.totalSpend)
 
@@ -80,6 +81,12 @@ export default function TopBar({
           {state.killed ? 'RESUME' : 'STOP'}
         </button>
       </div>
+
+      {onOpenGuide && (
+        <button className="bell help" onClick={onOpenGuide} title="How Glyde works" aria-label="How Glyde works">
+          ?
+        </button>
+      )}
 
       <button
         className={`bell ${noticesOpen ? 'bell--open' : ''}`}

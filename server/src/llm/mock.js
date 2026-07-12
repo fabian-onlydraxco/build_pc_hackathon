@@ -20,6 +20,7 @@ const USAGE = {
   direct: { input: 3000, output: 1200 },        // ≈ $0.027
   instruct: { input: 2500, output: 400 },       // ≈ $0.013
   intake: { input: 1500, output: 500 },         // ≈ $0.012
+  appoint: { input: 1200, output: 300 },        // ≈ $0.008
 }
 
 const BASE_DELAY = {
@@ -33,6 +34,7 @@ const BASE_DELAY = {
   direct: 1100,
   instruct: 900,
   intake: 800,
+  appoint: 900,
 }
 
 function hash(str) {
@@ -77,6 +79,17 @@ export async function mockComplete({ signal, meta }) {
     await sleep(BASE_DELAY[stage] * PACE, signal)
     return {
       text: `Understood — "${meta.text || 'your note'}" is now a standing instruction. Every chief gets it with their next task, and I'll hold their output against it. (Mock mode: add an API key for a real conversation.)`,
+      usage: USAGE[stage],
+    }
+  }
+  if (stage === 'appoint') {
+    await sleep(BASE_DELAY[stage] * PACE, signal)
+    return {
+      text: JSON.stringify({
+        name: 'Atlas',
+        persona: 'Calm, decisive, allergic to waste. Runs lean teams on tight loops and answers only to the CEO.',
+        why: 'A steady generalist operator — right for a first run.',
+      }),
       usage: USAGE[stage],
     }
   }
