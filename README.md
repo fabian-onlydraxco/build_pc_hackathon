@@ -29,12 +29,13 @@ npm run dev:client   # App on http://localhost:5173
 
 Open **http://localhost:5173**, type an idea (or press Build on the placeholder), and watch.
 
-### Providers — mock vs live Claude
+### Providers — live AI or keyless mock
 
-- **No API key → mock provider.** The full product works end-to-end at zero cost: deterministic agents, realistic pacing, rich content for the rehearsed idea ("budgeting template") and coherent generic content for any other idea. This is also what generates replay fixtures.
-- **Live Claude:** copy `.env.example` to `server/.env`, set `ANTHROPIC_API_KEY`, restart the server. Models, prices, and caps live in `server/src/config.js` — the only file that knows model names. All vendor traffic goes through `server/src/llm/adapter.js` (a plain-fetch seam), so swapping providers later means implementing one function.
+- **OpenRouter (recommended):** copy `.env.example` to `server/.env`, set `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` (any model on openrouter.ai — e.g. `qwen/qwen3.6-plus`), restart the server. Model pricing for the burn meter is fetched live from OpenRouter's catalog at boot — nothing hardcoded. `server/.env` is gitignored; keys never leave your machine.
+- **Anthropic:** set `ANTHROPIC_API_KEY` instead (used when no OpenRouter key is present).
+- **No API key → mock provider.** The full product still works end-to-end at zero cost: deterministic agents, realistic pacing, rich content. This is also what generates replay fixtures.
 
-The server banner tells you which provider is active on boot.
+All vendor traffic goes through `server/src/llm/adapter.js` (a plain-fetch seam, no SDKs); models, prices, and caps live in `server/src/config.js`. The server banner tells you which provider and model are active on boot.
 
 ## The demo runbook
 

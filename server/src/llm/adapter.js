@@ -1,5 +1,6 @@
 import { PROVIDER, MODELS, CAPS } from '../config.js'
 import { claudeComplete } from './claude.js'
+import { openrouterComplete } from './openrouter.js'
 import { mockComplete } from './mock.js'
 import { abortError } from './errors.js'
 
@@ -9,6 +10,9 @@ async function attempt({ model, tier, system, prompt, maxTokens, runSignal, meta
   const timeout = AbortSignal.timeout(CAPS.callTimeoutMs)
   const signal = runSignal ? AbortSignal.any([runSignal, timeout]) : timeout
 
+  if (PROVIDER === 'openrouter') {
+    return openrouterComplete({ model, system, prompt, maxTokens, signal })
+  }
   if (PROVIDER === 'claude') {
     return claudeComplete({ model, system, prompt, maxTokens, signal })
   }

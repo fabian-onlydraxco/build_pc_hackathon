@@ -150,7 +150,12 @@ function normalizeOrg(org) {
     title: chief.title || `Chief Officer ${i + 1}`,
     persona: chief.persona || 'Focused and reliable.',
     hero_artifact: chief.hero_artifact || 'Department deliverable',
-    budget_usd: Number(chief.budget_usd) > 0 ? Number(chief.budget_usd) : CAPS.defaultChiefBudgetUsd,
+    // Envelope = today's agent-labor budget. Models sometimes answer with the
+    // BUSINESS budget in the hundreds — clamp to a sane labor range.
+    budget_usd:
+      Number(chief.budget_usd) > 0
+        ? Math.min(Math.max(Number(chief.budget_usd), 0.05), 1)
+        : CAPS.defaultChiefBudgetUsd,
     hires: (chief.hires || []).slice(0, CAPS.maxEmployeesPerChief).map((hire, j) => ({
       id: String(hire.id || `${chief.id}-${j + 1}`).toLowerCase(),
       role: hire.role || 'Specialist',
@@ -276,7 +281,8 @@ export async function startRun(run) {
     if (run.killedAt) return
     await maybeDeliver(run)
   } catch (err) {
-    if (isAbort(err) || run.killedAt) return
+    // Only a CEO kill stays quiet — timeouts and API failures must be loud.
+    if (run.killedAt) return
     run.bus.emit('error', { message: err.message })
     run.status = 'error'
     emitRunStatus(run)
@@ -387,12 +393,13 @@ async function runChief(run, chief) {
 
     await maybeDeliver(run)
   } catch (err) {
-    if (isAbort(err) || run.killedAt) {
+    if (run.killedAt) {
       setStatus(run, chief, 'paused')
       return
     }
     logAgent(run, chief, `Hit a problem: ${err.message}`)
     run.bus.emit('error', { message: `${chief.title}: ${err.message}`, agentId: chief.id })
+    narrate(run, `${chief.title} hit a problem — press STOP then RESUME to retry that department.`)
     setStatus(run, chief, 'paused')
   } finally {
     chief.inFlight = false
@@ -433,7 +440,7 @@ async function maybeDeliver(run) {
     narrate(run, `The package is ready, CEO. Total agent labor: $${spend.toFixed(2)}.`)
     run.bus.emit('run_done', { totalSpendUsd: spend, durationMs: Date.now() - run.startedAt })
   } catch (err) {
-    if (!isAbort(err) && !run.killedAt) {
+    if (!run.killedAt) {
       run.bus.emit('error', { message: `Delivery: ${err.message}` })
     }
   } finally {
@@ -544,7 +551,7 @@ export function executeHire(run, { chiefId, proposal, scope = 'project' }) {
       logAgent(run, employee, `Delivered: ${output.slice(0, 240)}${output.length > 240 ? '…' : ''}`)
       setStatus(run, employee, 'done')
     } catch (err) {
-      if (isAbort(err) || run.killedAt) {
+      if (run.killedAt) {
         setStatus(run, employee, 'paused')
         return
       }

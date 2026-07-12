@@ -1,4 +1,4 @@
-import { fmtUsd } from '../../lib/format.js'
+import { fmtUsd, fmtBurn } from '../../lib/format.js'
 
 function Dot({ status }) {
   return <span className={`dot dot--${status || 'hired'}`} aria-hidden="true" />
@@ -7,9 +7,9 @@ function Dot({ status }) {
 function Node({ agent, dept, selected, onSelect, className = '' }) {
   const spend =
     agent.tier === 'chief'
-      ? `${fmtUsd(dept?.spent ?? agent.spentUsd ?? 0)} / ${fmtUsd(dept?.budget ?? agent.budgetUsd ?? 0)}`
+      ? `${fmtBurn(dept?.spent ?? agent.spentUsd ?? 0)} / ${fmtUsd(dept?.budget ?? agent.budgetUsd ?? 0)}`
       : agent.spentUsd > 0
-        ? fmtUsd(agent.spentUsd)
+        ? fmtBurn(agent.spentUsd)
         : null
 
   return (

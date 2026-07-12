@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { fmtUsd, STATUS_WORD } from '../lib/format.js'
+import { fmtBurn, STATUS_WORD } from '../lib/format.js'
 
 const pendingCount = (project) =>
   Object.values(project.cards).filter((card) => card.status === 'pending').length
@@ -105,7 +105,7 @@ export default function Sidebar({ projects, order, activeId, pins, onSelect, onN
                     </>
                   )}
                   {' · '}
-                  {fmtUsd(project.totalSpend)}
+                  {fmtBurn(project.totalSpend)}
                 </span>
               </span>
 

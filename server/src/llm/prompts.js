@@ -11,6 +11,8 @@ export function composePrompt(idea, instructions = []) {
 ${notes}
 Design the smallest executive team that can turn this idea into a complete business package today. Typical teams draw from: Research, Finance, Marketing, Legal, Development — but choose what THIS idea needs (max ${CAPS.maxChiefs} chiefs, max ${CAPS.maxEmployeesPerChief} hires each).
 
+"budget_usd" is the department's AI-agent-labor envelope for TODAY'S run, in US dollars — realistic values are 0.05 to 0.50. It is NOT the business's operating budget.
+
 ${JSON_ONLY}
 Schema:
 {

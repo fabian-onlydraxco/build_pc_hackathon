@@ -2,6 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 
 export const fmtUsd = (n, digits = 2) => `$${(n || 0).toFixed(digits)}`
 
+// Spend display: cheap live models burn fractions of a cent — keep the number
+// alive with 4 decimals until it's big enough for cents to carry the story.
+export const fmtBurn = (n) => {
+  const value = n || 0
+  if (value === 0) return '$0.00'
+  return value >= 0.05 ? `$${value.toFixed(2)}` : `$${value.toFixed(4)}`
+}
+
 export const STATUS_WORD = {
   idle: 'ready',
   composing: 'composing',

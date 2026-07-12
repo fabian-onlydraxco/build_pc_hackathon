@@ -1,4 +1,4 @@
-import { fmtUsd, useCountUp, STATUS_WORD } from '../lib/format.js'
+import { fmtBurn, useCountUp, STATUS_WORD } from '../lib/format.js'
 
 export default function TopBar({
   section,
@@ -45,7 +45,7 @@ export default function TopBar({
 
       <div className="topbar__status">{STATUS_WORD[state.status] || state.status}</div>
       <div className="topbar__burn" title="Real agent labor spent on this project">
-        {fmtUsd(burn)}
+        {fmtBurn(burn)}
       </div>
 
       <button

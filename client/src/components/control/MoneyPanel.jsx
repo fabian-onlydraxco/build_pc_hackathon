@@ -1,4 +1,4 @@
-import { fmtUsd, fmtBig, useCountUp } from '../../lib/format.js'
+import { fmtUsd, fmtBurn, fmtBig, useCountUp } from '../../lib/format.js'
 
 export default function MoneyPanel({ state }) {
   const burn = useCountUp(state.totalSpend)
@@ -26,7 +26,7 @@ export default function MoneyPanel({ state }) {
         </div>
         <div>
           <span className="label">Real burn</span>
-          <div className="money__value">{fmtUsd(burn)}</div>
+          <div className="money__value">{fmtBurn(burn)}</div>
           <div className="money__cap">actual agent labor</div>
         </div>
       </div>
@@ -41,7 +41,7 @@ export default function MoneyPanel({ state }) {
             <div className="envelope__row">
               <span className="envelope__name">{chief.title.replace(/^Chief\s|\sOfficer$/g, '')}</span>
               <span className="envelope__nums">
-                {fmtUsd(dept.spent)} / {fmtUsd(dept.budget)}
+                {fmtBurn(dept.spent)} / {fmtUsd(dept.budget)}
               </span>
             </div>
             <div className="bar">

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { fmtUsd, fmtTime } from '../../lib/format.js'
+import { fmtBurn, fmtTime } from '../../lib/format.js'
 
 const AUTONOMY_OPTIONS = [
   { value: 'ask-all', label: 'Ask everything', desc: 'every step' },
@@ -98,7 +98,7 @@ export default function AgentInspector({ agent, dept, onClose, onUpdate }) {
                 Set
               </button>
               <span className="autonomy__desc" style={{ marginLeft: 'auto' }}>
-                spent {fmtUsd(spent)}
+                spent {fmtBurn(spent)}
               </span>
             </div>
             <div className="bar">
