@@ -4,7 +4,7 @@ export const PORT = Number(process.env.PORT || 5171)
 
 export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || ''
 export const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || ''
-export const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'qwen/qwen3.6-plus'
+export const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'qwen/qwen3-next-80b-a3b-instruct:free'
 
 // Provider: explicit override, else auto — OpenRouter when its key exists,
 // then Claude, then the keyless mock.

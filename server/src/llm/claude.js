@@ -1,10 +1,14 @@
-import { ANTHROPIC_API_KEY } from '../config.js'
+import { ANTHROPIC_API_KEY, CAPS } from '../config.js'
 
 // Direct REST call — no vendor SDK, so the adapter stays the only seam.
 export async function claudeComplete({ model, system, prompt, maxTokens, signal }) {
+  const requestSignal = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(CAPS.callTimeoutMs)])
+    : AbortSignal.timeout(CAPS.callTimeoutMs)
+
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    signal,
+    signal: requestSignal,
     headers: {
       'content-type': 'application/json',
       'x-api-key': ANTHROPIC_API_KEY,
@@ -20,7 +24,9 @@ export async function claudeComplete({ model, system, prompt, maxTokens, signal 
 
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    throw new Error(`Claude API ${res.status}: ${body.slice(0, 300)}`)
+    const err = new Error(`Claude API ${res.status}: ${body.slice(0, 300)}`)
+    err.status = res.status
+    throw err
   }
 
   const json = await res.json()
