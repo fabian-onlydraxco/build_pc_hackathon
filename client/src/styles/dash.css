@@ -1,0 +1,222 @@
+/* Dash-AI — the CEO's desk. Serene, almost empty. Density dial: 4 (airy). */
+
+.dash {
+  /* Fixed height: the stream is the ONLY scroll container, so the composer
+     never leaves the screen and auto-scroll always has something to scroll. */
+  height: calc(100vh - var(--topbar-h));
+  display: flex;
+  flex-direction: column;
+}
+
+/* Pre-run: a single centered quest */
+.quest {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s8) var(--s5);
+  animation: fade 400ms ease-out;
+}
+
+.quest__hero {
+  font-size: clamp(2rem, 4.4vw, 2.9rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  max-width: 18ch;
+  text-align: center;
+}
+
+.quest__sub {
+  margin-top: var(--s4);
+  color: var(--g1);
+  font-size: var(--t-md);
+  text-align: center;
+  max-width: 44ch;
+}
+
+.quest__form {
+  margin-top: var(--s7);
+  width: min(640px, 100%);
+  display: flex;
+  gap: var(--s3);
+}
+
+.quest__input {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 15px 24px;
+  font-size: var(--t-md);
+  transition: border-color 140ms ease;
+}
+
+.quest__input::placeholder {
+  color: var(--g2);
+}
+
+.quest__input:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.quest__hint {
+  margin-top: var(--s4);
+}
+
+/* Running: command stream */
+.stream {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s5) var(--s6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  scroll-behavior: smooth;
+}
+
+.stream__item {
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.narration {
+  animation: rise 240ms var(--ease-out);
+}
+
+.narration__who {
+  margin-bottom: 3px;
+}
+
+.narration__text {
+  font-size: var(--t-base);
+}
+
+.stream__error .narration__text {
+  color: var(--g1);
+  border-left: 2px solid var(--ink);
+  padding-left: var(--s3);
+}
+
+/* ------------------------------------------------ live board (on the floor) */
+
+.live {
+  border-top: 1px solid var(--line);
+  padding: var(--s3) var(--s6) var(--s2);
+  flex: none;
+}
+
+.live__inner {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.live__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+.live__pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ink);
+  align-self: center;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.live__tally {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  color: var(--g1);
+  font-variant-numeric: tabular-nums;
+}
+
+.live__grid {
+  margin-top: var(--s2);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  column-gap: var(--s5);
+  row-gap: 3px;
+}
+
+.live__row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  animation: rise 220ms var(--ease-out);
+}
+
+.live__row .dot {
+  align-self: center;
+}
+
+.live__who {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.live__dept {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--g2);
+  white-space: nowrap;
+}
+
+.live__task {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--t-xs);
+  color: var(--g1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.live__more {
+  align-self: center;
+}
+
+.dash__composer {
+  border-top: 1px solid var(--line);
+  padding: var(--s4) var(--s6);
+  flex: none;
+}
+
+.composer {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  gap: var(--s3);
+}
+
+.composer__input {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 10px 20px;
+  font-size: var(--t-sm);
+}
+
+.composer__input::placeholder {
+  color: var(--g2);
+}
+
+.composer__input:focus {
+  outline: none;
+  border-color: var(--ink);
+}

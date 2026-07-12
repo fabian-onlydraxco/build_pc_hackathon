@@ -1,0 +1,45 @@
+:root {
+  /* Monochrome system — paper, ink, exactly three grays. No color anywhere. */
+  --paper: #FAFAF8;
+  --surface: #FFFFFF;
+  --ink: #141413;
+  --g1: #57554F; /* secondary text */
+  --g2: #A3A099; /* tertiary, disabled, idle dots */
+  --line: #E7E5E0; /* hairlines, tracks */
+
+  --font-ui: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Type scale (ratio ~1.3) */
+  --t-2xs: 0.65625rem; /* 10.5 */
+  --t-xs: 0.75rem;     /* 12 */
+  --t-sm: 0.84375rem;  /* 13.5 */
+  --t-base: 0.9375rem; /* 15 */
+  --t-md: 1.0625rem;   /* 17 */
+  --t-lg: 1.375rem;    /* 22 */
+  --t-xl: 1.75rem;     /* 28 */
+  --t-2xl: 2.5rem;     /* 40 */
+
+  /* Spacing rhythm */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --s8: 72px;
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 12px;
+
+  --shadow-float:
+    0 1px 2px rgba(20, 20, 19, 0.04),
+    0 12px 32px rgba(20, 20, 19, 0.07);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-sig: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --topbar-h: 56px;
+}
